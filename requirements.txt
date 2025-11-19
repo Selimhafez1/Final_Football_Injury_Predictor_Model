@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+tensorflow-cpu
+joblib
+scikit-learn
+protobuf<4.21.0
