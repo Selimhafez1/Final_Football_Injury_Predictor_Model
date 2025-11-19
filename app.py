@@ -55,6 +55,9 @@ input_dict = {
     "foot_both": foot_both
 }
 
+st.write("DEBUG - Input DataFrame sent to model:")
+st.write(input_dict)
+
 df_input = pd.DataFrame([input_dict])
 df_input = df_input.reindex(columns=feature_cols, fill_value=0)
 
