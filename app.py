@@ -4,108 +4,65 @@ import pandas as pd
 import joblib
 from tensorflow.keras.models import load_model
 
-# -----------------------------
-# Load saved artifacts
-# -----------------------------
+# Load the NN model and preprocessors
 model = load_model("nn_injury_model.keras", compile=False)
 imputer = joblib.load("imputer.pkl")
 scaler = joblib.load("scaler.pkl")
 feature_cols = joblib.load("feature_cols.pkl")
 league_encoder = joblib.load("league_label_encoder.pkl")
-kmeans = joblib.load("workload_kmeans.pkl")
 
-st.title("⚽ Neural Network Injury Duration Predictor")
-st.write("Enter the player's season statistics to estimate expected days missed.")
+st.title("⚽ Football Injury Days Predictor")
+st.write("Enter the player's statistics below to estimate how many days they may be injured.")
 
-# -----------------------------
-# User Inputs
-# -----------------------------
+# ===== USER INPUTS =====
+minutes_played = st.number_input("Minutes played this season", 0, 6000)
+games_played = st.number_input("Games played this season", 0, 80)
+yellow_cards = st.number_input("Yellow Cards", 0, 30)
+second_yellow_cards = st.number_input("Second Yellow Cards", 0, 10)
+red_cards = st.number_input("Direct Red Cards", 0, 10)
 
-# Main inputs
-minutes_played = st.number_input("Minutes played this season", min_value=0)
-games_played = st.number_input("Games played this season", min_value=0)
-yellow = st.number_input("Yellow Cards", min_value=0)
-second_yellow = st.number_input("Second Yellow Cards", min_value=0)
-red = st.number_input("Red Cards", min_value=0)
+age = st.number_input("Age", 15, 45)
+height = st.number_input("Height (cm)", 140, 220)
 
-age = st.number_input("Age", min_value=14, max_value=50)
-height = st.number_input("Height (cm)", min_value=140, max_value=220)
+previous_days_missed = st.number_input("Previous days missed due to injuries", 0, 1000)
+previous_minutes = st.number_input("Previous season minutes played", 0, 6000)
+previous_games = st.number_input("Previous season games played", 0, 80)
 
-# League dropdown
-league_name = st.selectbox("League", league_encoder.classes_.tolist())
-league_code = league_encoder.transform([league_name])[0]
-
-# Previous season stats
-prev_days = st.number_input("Previous season days missed", min_value=0)
-prev_minutes = st.number_input("Previous season minutes played", min_value=0)
-prev_games = st.number_input("Previous season games played", min_value=0)
-
-# Preferred foot dropdown
-foot_choice = st.selectbox("Preferred Foot", ["right", "left", "both"])
-
-# -----------------------------
-# Internal Feature Engineering
-# -----------------------------
-
-# Card score formula from training
-card_score = yellow + second_yellow*2 + red*5
-
-# Fatigue & workload
-fatigue = minutes_played / max(games_played, 1)
-workload = (minutes_played + prev_minutes) / max(games_played + prev_games, 1)
-
-# Foot one-hot
-foot_right = 1 if foot_choice == "right" else 0
+foot_choice = st.selectbox("Preferred Foot", ["left", "right", "both"])
 foot_left = 1 if foot_choice == "left" else 0
+foot_right = 1 if foot_choice == "right" else 0
 foot_both = 1 if foot_choice == "both" else 0
 
-# Workload cluster (KMeans)
-cluster = kmeans.predict([[workload]])[0]
-cluster_0 = 1 if cluster == 0 else 0
-cluster_1 = 1 if cluster == 1 else 0
+league_list = league_encoder.classes_
+league_choice = st.selectbox("League", league_list)
+league_encoded = league_encoder.transform([league_choice])[0]
 
-# Squared features
-age_sq = age**2
-fatigue_sq = fatigue**2
-workload_sq = workload**2
-
-# -----------------------------
-# Build model input vector
-# -----------------------------
-
-data = {
+# ===== BUILD INPUT VECTOR =====
+input_dict = {
     "minutes_played": minutes_played,
     "games_played": games_played,
-    "card_score": card_score,
-    "fatigue": fatigue,
-    "workload": workload,
+    "yellow_cards": yellow_cards,
+    "second_yellow_cards": second_yellow_cards,
+    "direct_red_cards": red_cards,
     "age": age,
     "height": height,
-    "league_code": league_code,
-    "prev_days_missed": prev_days,
-    "prev_minutes_played": prev_minutes,
-    "prev_fatigue": prev_minutes / max(prev_games, 1),
-    "prev_games_played": prev_games,
-    "age_squared": age_sq,
-    "fatigue_squared": fatigue_sq,
-    "workload_squared": workload_sq,
+    "previous_days_missed": previous_days_missed,
+    "previous_minutes": previous_minutes,
+    "previous_games": previous_games,
+    "league_encoded": league_encoded,
     "foot_left": foot_left,
     "foot_right": foot_right,
-    "foot_both": foot_both,
-    "cluster_0": cluster_0,
-    "cluster_1": cluster_1,
+    "foot_both": foot_both
 }
 
-# Convert to DataFrame with correct order
-df = pd.DataFrame([data], columns=feature_cols)
+df_input = pd.DataFrame([input_dict])
+df_input = df_input.reindex(columns=feature_cols, fill_value=0)
 
-# -----------------------------
-# Predict
-# -----------------------------
-if st.button("🔮 Predict Injury Duration"):
-    imputed = imputer.transform(df)
-    scaled = scaler.transform(imputed)
-    log_pred = model.predict(scaled)[0][0]
-    final_pred = np.expm1(log_pred)
+# Preprocess
+df_input = imputer.transform(df_input)
+df_input = scaler.transform(df_input)
 
-    st.success(f"⏳ Predicted Injury Duration: **{final_pred:.1f} days**")
+# ===== PREDICT =====
+if st.button("Predict Injury Days"):
+    pred = model.predict(df_input)[0][0]
+    st.subheader(f"Predicted Injury Duration: **{pred:.1f} days**")
