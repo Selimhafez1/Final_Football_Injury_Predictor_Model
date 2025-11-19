@@ -1,7 +1,6 @@
 streamlit
 pandas
 numpy
-tensorflow-cpu
+tensorflow
 joblib
 scikit-learn
-protobuf<4.21.0
